@@ -9,14 +9,14 @@
                         Aksi
                     </button>
                     <div class="dropdown-menu">
-                        <a class="dropdown-item" href="#">Edit</a>
-                        <a class="dropdown-item" href="#">Hapus</a>
-                        <a class="dropdown-item" href="{{ route('post.index') }}">Kembali</a>
+                        <li class="dropdown-item" style="cursor: pointer" href="{{ route('post.edit', ['post' => $post->id]) }}" id="edit-post">Edit</li>
+                        <li class="dropdown-item" style="cursor: pointer" href="{{ route('post.delete', ['post' => $post->id]) }}" id="delete-post">Hapus</li>
+                        <a class="dropdown-item" href="{{ route('post.index') }}" id="back">Kembali</a>
                     </div>
                 </div>
             </div>
             <div class="card-body">
-                <div class="row">
+                <div class="row" id="post-body">
                     <div class="col-12">
                         <b>{{ $post->user->name }}</b> - {{ $post->title }}<br>
                         <span class="date-post">{{ \Carbon\Carbon::parse($post->created_at)->diffForHumans() }}</span>
@@ -32,6 +32,27 @@
                             @endphp
                             <a href="{{ $media }}">Attachment {{ $key }}{{$separator}}</a>
                         @endforeach
+                    </div>
+                </div>
+                <div class="row" id="post-form-edit" style="display: none">
+                    <div class="col-12">
+                        <form action="{{ route('post.update', ['post' => $post->id]) }}" method="POST" enctype="multipart/form-data" method="POST" id="form-edit-post">
+                            @csrf
+                            <div class="form-group">
+                                <input class="form-control" name="title" id="edit-title" placeholder="Tulis judul disini" required>
+                            </div>
+                            <div class="form-group">
+                                <textarea class="form-control" name="description" id="edit-description" placeholder="Tulis deskripsi disini" required></textarea>
+                            </div>
+                            <div class="form-group" id="attachment-render">
+
+                            </div>
+                            <div class="form-group">
+                                <input type="file" multiple name="media[]" class="form-control">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Bagikan</button>
+                            <button type="button" class="btn btn-danger" id="cancel-edit">Batalkan</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -75,7 +96,7 @@
                 let divParent = $(this).parent('div')[0];
                 let formId = `#${divParent.id}`;
                 // prevent form display more than one
-                if ( $(formId).children().length > 2 ) {
+                if ( $(formId).children().length > 3 ) {
                     $(formId).children('form:first').remove();
                     return;
                 }
@@ -89,18 +110,93 @@
                 e.preventDefault()
                 addComment($(this).parents("form")[0])
             })
+
+            $(document).on('click', '.delete-comment', function () {
+                let commentId = $(this).data('comment-id');
+                deleteComment(commentId)
+            })
+
+            $(document).on('click', '.delete-attachment', function () {
+                let attachment = $(this).data('attachment')
+                let url = '{{ route('post.delete.attachment', ['post' => $post->id, 'attachment' => ':attachment']) }}';
+                url = url.replace(':attachment', attachment)
+                let currentClicked = $(this)
+
+                $.ajax({
+                    url: url,
+                    type: 'DELETE',
+                }).done(function (data) {
+                    currentClicked.remove()
+                });
+            })
         });
+
+        $('#form-edit-post').submit(function (e) {
+            e.preventDefault()
+            let formData = new FormData(this);
+            let url = this.action;
+
+            $.ajax({
+                url: url,
+                type: 'POST',
+                data: formData,
+                cache: false,
+                contentType: false,
+                processData: false,
+                enctype: 'multipart/form-data',
+            }).done(function (data) {
+                window.location.reload()
+            });
+        })
+
+        $('#edit-post').click(function () {
+            let url = $(this).attr('href');
+            $.ajax({
+                url: url,
+                type: 'GET',
+            }).done(function (data) {
+                $('#edit-title').val(data.title)
+                $('#edit-description').val(data.description)
+
+                let media = data.media
+                let mediaHtml = '';
+                if (media !== "") {
+                    let index = 1;
+                    for (let mdi of media) {
+                        mediaHtml += `<span class="delete-attachment" data-attachment="${mdi}">Attachment ${index}</span> `
+                        index += 1;
+                    }
+                }
+
+                $('#attachment-render').html(mediaHtml)
+                $('#post-body').hide();
+                $('#post-form-edit').show();
+            });
+        });
+
+        $('#cancel-edit').click(function () {
+            $('#post-body').show();
+            $('#post-form-edit').hide();
+        });
+
+        $('#delete-post').click( function () {
+            let url = $(this).attr('href');
+            let urlBack = $('#back').attr('href');
+
+            $.ajax({
+                url: url,
+                type: 'DELETE',
+            }).done(function (data) {
+                window.location.href = urlBack;
+            });
+        })
 
         function loadComment(postURL) {
             $.ajax({
                 method: "GET",
                 url: postURL
             }).done(function (comments) {
-                if (comments.length > 0) {
-                    renderComment(comments)
-                } else {
-                    // action jika komen kosong
-                }
+                renderComment(comments)
             })
         }
 
@@ -146,13 +242,19 @@
                 mediaLink += `<a href="${media}" target="_blank">Attachment ${index}</a>${separator}`;
             }
 
+            let deleteComment = '';
+            if (comment.can_delete === true) {
+                deleteComment = `  <span class="delete-comment" data-comment-id="${comment.id}">Hapus</span>`;
+            }
+
             html = `<div class="row" style="margin-top: 15px; margin-left: ${marginLeft}px">`+
                 `<div class="col-md-12"><b>${comment.commentator.name}</b><br>`+
                 `<div class="date-post">${comment.created_at}</div>`+
                 `${comment.comment}<br>`+
                 `${mediaLink}`+
                 `</div>`+
-                `<div class="col-md-12" data-comment-id="${comment.id}" id="form-comment-${comment.id}"><span class="reply">Balas</span><br></div>`+
+                `<div class="col-md-12" data-comment-id="${comment.id}" id="form-comment-${comment.id}"><span class="reply">Balas</span>`+
+                `${deleteComment}<br></div>`+
                 `</div>`
 
             let marginLeftCopy = marginLeft;
@@ -167,8 +269,16 @@
             return html;
         }
 
-        function deleteComment() {
+        function deleteComment(commentId) {
+            let url = '{{ route('post.comment.delete', ['comment' => ':id']) }}'
+            url = url.replace(':id', commentId)
 
+            $.ajax({
+                url: url,
+                type: 'DELETE',
+            }).done(function (data) {
+                loadComment(postURL)
+            });
         }
     </script>
 @endpush

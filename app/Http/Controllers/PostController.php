@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CommentRequest;
 use App\Http\Requests\PostStoreRequest;
+use App\Http\Requests\PostUpdateRequest;
 use App\Models\Comment;
 use App\Models\Post;
 use Carbon\Carbon;
@@ -75,6 +76,83 @@ class PostController extends Controller
         return view('post.show', compact('post', 'media_path'));
     }
 
+    public function edit(Post $post): JsonResponse
+    {
+        if (Auth::user()->role != 'admin') {
+            abort(403);
+        }
+
+        $data = [
+            'id' => $post->id,
+            'title' => $post->title,
+            'description' => $post->description,
+            'media' => $post->media ? explode(',', $post->media) : "",
+        ];
+
+        return response()->json($data);
+    }
+
+    public function update(Post $post, PostUpdateRequest $request)
+    {
+        $files = [];
+        if ($request->hasFile('media')) {
+            foreach ($request->file('media') as $media) {
+                $name = time().rand(1,100000000).'.'.$media->extension();
+                Storage::disk('public')->putFileAs('posts', $media, $name);
+                $files[] = $name;
+            }
+        }
+
+        if ($files) {
+            $media = explode(',', $post->media);
+            if ($media) {
+                $media = array_merge($media, $files);
+            } else {
+                $media = $files;
+            }
+
+            $post->media = implode(',', $media);
+        }
+
+        $post->title = $request->title;
+        $post->description = $request->description;
+        $post->update();
+
+        return response()->json("ok");
+    }
+
+    public function delete(Post $post): JsonResponse
+    {
+        if (Auth::user()->role != 'admin') {
+            abort(403);
+        }
+
+        $post->delete();
+
+        return response()->json("ok");
+    }
+
+    public function deleteAttachment(Post $post, $attachment)
+    {
+        if (Auth::user()->role != 'admin') {
+            abort(403);
+        }
+
+        $media = explode(',', $post->media);
+        if (($key = array_search($attachment, $media)) !== false) {
+            unset($media[$key]);
+        }
+
+        if (Storage::disk('public')->exists('posts/'.$attachment)) {
+            Storage::disk('public')->delete('posts/'.$attachment);
+        }
+
+        $post->media = $media ? implode(',', $media) : null;
+        $post->update();
+
+        return response()->json("ok");
+    }
+
     public function comment(Post $post): JsonResponse
     {
         $post = $post->load(['comments', 'comments.commentator']);
@@ -115,9 +193,15 @@ class PostController extends Controller
 
     }
 
-    public function deleteComment()
+    public function deleteComment(Comment $comment): JsonResponse
     {
+        if ($comment->user_id != Auth::id()) {
+            abort(403);
+        }
 
+        $comment->delete();
+
+        return response()->json("ok");
     }
 
     public function format($comment)
@@ -147,6 +231,7 @@ class PostController extends Controller
             'comment' => $comment->comment,
             'media' => $media_path,
             'is_approved' => $comment->is_approved,
+            'can_delete' => Auth::id() == $comment->user_id,
             'created_at' => Carbon::parse($comment->created_at)->diffForHumans(),
             'commentator' => [
                 'id' => data_get($comment, 'commentator.id', ''),
