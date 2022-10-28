@@ -1,0 +1,25 @@
+.card-login {
+    max-width: 40%;
+    margin-top: 20%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.card-post {
+    min-width: 80%;
+    max-width: 80%;
+    margin-top: 5%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.date-post {
+    font-size: 10px;
+    color: #6b7280;
+}
+
+.reply {
+    font-size: 12px;
+    color: blue;
+    cursor: pointer;
+}
