@@ -104,7 +104,7 @@ class PostController extends Controller
         }
 
         if ($files) {
-            $media = explode(',', $post->media);
+            $media = $post->media ? explode(',', $post->media) : '';
             if ($media) {
                 $media = array_merge($media, $files);
             } else {
@@ -138,7 +138,7 @@ class PostController extends Controller
             abort(403);
         }
 
-        $media = explode(',', $post->media);
+        $media = $post->media ? explode(',', $post->media) : [];
         if (($key = array_search($attachment, $media)) !== false) {
             unset($media[$key]);
         }
