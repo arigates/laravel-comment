@@ -25,12 +25,29 @@
 }
 
 .delete-comment {
+    margin-left: 10px;
+    font-size: 12px;
+    color: blue;
+    cursor: pointer;
+}
+
+.edit-comment {
+    margin-left: 10px;
     font-size: 12px;
     color: blue;
     cursor: pointer;
 }
 
 .delete-attachment {
+    padding: 5px;
+    background-color: red;
+    font-size: 12px;
+    color: white;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.delete-attachment-comment {
     padding: 5px;
     background-color: red;
     font-size: 12px;

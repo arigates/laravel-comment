@@ -78,12 +78,32 @@
                 <button type="button" class="btn btn-primary submit-button">Simpan</button>
             </form>
         </div>
+        <div class="form-clone-comment" style="display: none">
+            <form action=":action" method="POST" enctype="multipart/form-data">
+                @csrf
+                <div class="form-group">
+                    <textarea class="form-control" name="comment" placeholder="Tulis komentar disini">:comment</textarea>
+                </div>
+                <div class="form-group">
+                    :attachment
+                </div>
+                <div class="form-group">
+                    <input type="file" multiple name="media[]" class="form-control">
+                </div>
+                <button type="button" class="btn btn-primary submit-button">Simpan</button>
+                <button type="button" class="btn btn-danger cancel-edit-comment">Batalkan</button>
+            </form>
+        </div>
     </div>
 @endsection
 
 @push('js')
     <script>
         let postURL = $('#post').data('post-url');
+        let cloneComment = '';
+        let reRenderComment = false;
+        let marginLeft = 0;
+
         $(document).ready(function () {
             loadComment(postURL)
 
@@ -96,7 +116,7 @@
                 let divParent = $(this).parent('div')[0];
                 let formId = `#${divParent.id}`;
                 // prevent form display more than one
-                if ( $(formId).children().length > 3 ) {
+                if ( $(formId).children().length > 4 ) {
                     $(formId).children('form:first').remove();
                     return;
                 }
@@ -116,6 +136,53 @@
                 deleteComment(commentId)
             })
 
+            $(document).on('click', '.edit-comment', function () {
+                if (cloneComment !== '') {
+                    $('.cancel-edit-comment:first').click()
+                }
+
+                let commentId = $(this).data('comment-id');
+                let parent = $(this).parent().parent('div');
+                cloneComment = parent.html();
+                let form = $('.form-clone-comment').html();
+                let url = '{{ route('post.comment.edit', ['comment' => ':comment']) }}'
+                url = url.replace(':comment', commentId)
+
+                $.ajax({
+                    url: url,
+                    type: 'GET',
+                }).done(function (data) {
+                    form = form.replace(':action', url)
+                    form = form.replace(':comment', data.comment)
+
+                    let media = data.media
+                    let mediaHtml = '';
+                    if (media !== "") {
+                        let index = 1;
+                        for (let mdi of media) {
+                            mediaHtml += `<span class="delete-attachment-comment" data-comment-id="${commentId}" data-attachment="${mdi}">Attachment ${index}</span> `
+                            index += 1;
+                        }
+                    }
+
+                    form = form.replace(':attachment', mediaHtml);
+                    parent.html(form)
+                });
+            })
+
+            $(document).on('click', '.cancel-edit-comment', function () {
+                if (reRenderComment === true) {
+                    loadComment(postURL)
+                    cloneComment = '';
+                    reRenderComment = false
+                    return;
+                }
+
+                let divComment = $(this).parent().parent('div');
+                divComment.html(cloneComment);
+                cloneComment = '';
+            })
+
             $(document).on('click', '.delete-attachment', function () {
                 let attachment = $(this).data('attachment')
                 let url = '{{ route('post.delete.attachment', ['post' => $post->id, 'attachment' => ':attachment']) }}';
@@ -129,6 +196,25 @@
                     currentClicked.remove()
                 });
             })
+
+            $(document).on('click', '.delete-attachment-comment', function () {
+                let commentId = $(this).data('comment-id');
+                let attachment = $(this).data('attachment');
+                let url = '{{ route('post.comment.delete.attachment', ['comment' => ':comment', 'attachment' => ':attachment']) }}'
+
+                url = url.replace(':comment', commentId)
+                url = url.replace(':attachment', attachment)
+
+                let currentClicked = $(this)
+
+                $.ajax({
+                    url: url,
+                    type: 'DELETE',
+                }).done(function (data) {
+                    currentClicked.remove();
+                    reRenderComment = true;
+                });
+            });
         });
 
         $('#form-edit-post').submit(function (e) {
@@ -196,6 +282,8 @@
                 method: "GET",
                 url: postURL
             }).done(function (comments) {
+                cloneComment = ''
+                reRenderComment = false
                 renderComment(comments)
             })
         }
@@ -217,8 +305,6 @@
                 loadComment(postURL)
             });
         }
-
-        var marginLeft = 0;
 
         function renderComment(comments) {
             let commentHtml = '';
@@ -242,19 +328,24 @@
                 mediaLink += `<a href="${media}" target="_blank">Attachment ${index}</a>${separator}`;
             }
 
+            let editComment = '';
+            if (comment.can_edit === true) {
+                editComment = `<span class="edit-comment" data-comment-id="${comment.id}">Edit</span>`;
+            }
+
             let deleteComment = '';
             if (comment.can_delete === true) {
-                deleteComment = `  <span class="delete-comment" data-comment-id="${comment.id}">Hapus</span>`;
+                deleteComment = `<span class="delete-comment" data-comment-id="${comment.id}">Hapus</span>`;
             }
 
             html = `<div class="row" style="margin-top: 15px; margin-left: ${marginLeft}px">`+
                 `<div class="col-md-12"><b>${comment.commentator.name}</b><br>`+
                 `<div class="date-post">${comment.created_at}</div>`+
-                `${comment.comment}<br>`+
+                `<div class="comment">${comment.comment}</div>`+
                 `${mediaLink}`+
+                `<div data-comment-id="${comment.id}" id="form-comment-${comment.id}"><span class="reply">Balas</span>`+
+                `${editComment}${deleteComment}<br></div>`+
                 `</div>`+
-                `<div class="col-md-12" data-comment-id="${comment.id}" id="form-comment-${comment.id}"><span class="reply">Balas</span>`+
-                `${deleteComment}<br></div>`+
                 `</div>`
 
             let marginLeftCopy = marginLeft;

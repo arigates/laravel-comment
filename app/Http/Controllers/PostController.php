@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\CommentRequest;
+use App\Http\Requests\CommentStoreRequest;
+use App\Http\Requests\CommentUpdateRequest;
 use App\Http\Requests\PostStoreRequest;
 use App\Http\Requests\PostUpdateRequest;
 use App\Models\Comment;
@@ -116,7 +117,7 @@ class PostController extends Controller
 
         $post->title = $request->title;
         $post->description = $request->description;
-        $post->update();
+        $post->save();
 
         return response()->json("ok");
     }
@@ -148,7 +149,7 @@ class PostController extends Controller
         }
 
         $post->media = $media ? implode(',', $media) : null;
-        $post->update();
+        $post->save();
 
         return response()->json("ok");
     }
@@ -165,7 +166,7 @@ class PostController extends Controller
         return response()->json($comments);
     }
 
-    public function addComment(CommentRequest $request, Post $post)
+    public function addComment(CommentStoreRequest $request, Post $post)
     {
         $files = [];
         if ($request->hasFile('media')) {
@@ -188,9 +189,72 @@ class PostController extends Controller
         return response()->json("ok");
     }
 
-    public function editComment()
+    public function editComment(Comment $comment)
     {
+        if ($comment->user_id != Auth::id()) {
+            abort(403);
+        }
 
+        $data = [
+            'id' => $comment->id,
+            'comment' => $comment->comment,
+            'media' => $comment->media ? explode(',', $comment->media) : ""
+        ];
+
+        return response()->json($data);
+    }
+
+    public function updateComment(Comment $comment, CommentUpdateRequest $request)
+    {
+        if ($comment->user_id != Auth::id()) {
+            abort(403);
+        }
+
+        $files = [];
+        if ($request->hasFile('media')) {
+            foreach ($request->file('media') as $media) {
+                $name = time().rand(1,100000000).'.'.$media->extension();
+                Storage::disk('public')->putFileAs('posts', $media, $name);
+                $files[] = $name;
+            }
+        }
+
+        if ($files) {
+            $media = $comment->media ? explode(',', $comment->media) : '';
+            if ($media) {
+                $media = array_merge($media, $files);
+            } else {
+                $media = $files;
+            }
+
+            $comment->media = implode(',', $media);
+        }
+
+        $comment->comment = $request->comment;
+        $comment->save();
+
+        return response()->json("ok");
+    }
+
+    public function deleteCommentAttachment(Comment $comment, $attachment): JsonResponse
+    {
+        if ($comment->user_id != Auth::id()) {
+            abort(403);
+        }
+
+        $media = $comment->media ? explode(',', $comment->media) : [];
+        if (($key = array_search($attachment, $media)) !== false) {
+            unset($media[$key]);
+        }
+
+        if (Storage::disk('public')->exists('posts/'.$attachment)) {
+            Storage::disk('public')->delete('posts/'.$attachment);
+        }
+
+        $comment->media = $media ? implode(',', $media) : null;
+        $comment->save();
+
+        return response()->json("ok");
     }
 
     public function deleteComment(Comment $comment): JsonResponse
@@ -221,7 +285,7 @@ class PostController extends Controller
                 continue;
             }
 
-            $media_path[] = asset('posts/'.$mdi);
+            $media_path[] = asset('file-post/'.$mdi);
         }
 
          return [
@@ -232,6 +296,7 @@ class PostController extends Controller
             'media' => $media_path,
             'is_approved' => $comment->is_approved,
             'can_delete' => Auth::id() == $comment->user_id,
+            'can_edit' => Auth::id() == $comment->user_id,
             'created_at' => Carbon::parse($comment->created_at)->diffForHumans(),
             'commentator' => [
                 'id' => data_get($comment, 'commentator.id', ''),

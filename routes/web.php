@@ -59,6 +59,15 @@ Route::prefix('/posts')->name('post.')->middleware('auth')->group(function () {
     Route::post('/{post}/comments', [PostController::class, 'addComment'])
         ->name('comment.submit');
 
+    Route::get('/comments/{comment}', [PostController::class, 'editComment'])
+        ->name('comment.edit');
+
+    Route::post('/comments/{comment}', [PostController::class, 'updateComment'])
+        ->name('comment.update');
+
+    Route::delete('/comments/{comment}/attachment/{attachment}', [PostController::class, 'deleteCommentAttachment'])
+        ->name('comment.delete.attachment');
+
     Route::delete('/comments/{comment}', [PostController::class, 'deleteComment'])
         ->name('comment.delete');
 });
