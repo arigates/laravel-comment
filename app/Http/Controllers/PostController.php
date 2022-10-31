@@ -128,6 +128,11 @@ class PostController extends Controller
             abort(403);
         }
 
+        $comments = $post->comments;
+        foreach ($comments as $comment) {
+            $this->deleteAllComment($comment);
+        }
+
         $post->delete();
 
         return response()->json("ok");
