@@ -263,9 +263,32 @@ class PostController extends Controller
             abort(403);
         }
 
-        $comment->delete();
+        $this->deleteAllComment($comment);
 
         return response()->json("ok");
+    }
+
+    public function deleteAllComment($comment)
+    {
+        $comment = $comment->load('comments');
+        $commentChild = $comment->comments;
+
+        $media = $comment->media ? explode(',', $comment->media) : '';
+        if ($media) {
+            foreach ($media as $mdi) {
+                if (Storage::disk('public')->exists('posts/'.$mdi)) {
+                    Storage::disk('public')->delete('posts/'.$mdi);
+                }
+            }
+        }
+
+        $comment->delete();
+
+        if ($commentChild && $commentChild->count() > 0) {
+            foreach ($commentChild as $child) {
+                $this->deleteAllComment($child);
+            }
+        }
     }
 
     public function format($comment)
